@@ -1,6 +1,8 @@
 import sqlite3
 import pandas as pd
+import numpy as np
 import os
+import scipy.stats as stats
 
 DB_name = 'clinical_trial.db'
 csv_file = 'cell-count.csv'
@@ -115,8 +117,80 @@ def get_frequency():
         return df_long
 
 # Part 3
+def get_statistics():
+    df = get_frequency()
+
+    subset = df[
+        (df['condition'].str.lower() == 'melanoma') &
+        (df['treatment'].str.lower() == 'miraclib') &
+        (df['sample_type'].str.upper() == 'PBMC')
+    ]
+
+    statistical_results = []
+    num_tests = len(subset['population'].unique())
+
+    for population in subset['population'].unique():
+        population_data = subset[subset['population'] == population]
+
+        responders = population_data[population_data['response'].str.lower() == 'yes']['percentage']
+        non_responders = population_data[population_data['response'].str.lower() == 'no']['percentage']
+
+        num_responders, num_non_responders = len(responders), len(non_responders)
+
+        # Calculate means and medians
+        if num_responders > 0 and num_non_responders > 0:
+            responder_mean = np.mean(responders)
+            responder_median = np.median(responders)
+            non_responder_mean = np.mean(non_responders)
+            non_responder_median = np.median(non_responders)
+        else:
+            responder_mean = responder_median = non_responder_mean = non_responder_median = 0
+
+        # Normality test
+        is_normal = False
+        if num_responders >= 3 and num_non_responders >= 3:
+            _, p_responders = stats.shapiro(responders)
+            _, p_non_responders = stats.shapiro(non_responders)
+            is_normal = (p_responders > 0.05) and (p_non_responders > 0.05)
+
+        p_value = None
+        test_used = "N/A"
+
+        if num_responders > 1 and num_non_responders > 1:
+            if is_normal:
+                _, p_value = stats.ttest_ind(responders, non_responders, equal_var=False)
+                test_used = "t-test"
+            else:
+                _, p_value = stats.mannwhitneyu(responders, non_responders, alternative='two-sided')
+                test_used = "Mann-Whitney U"
+        
+        if p_value is not None:
+            adjusted_p_value = min(p_value * num_tests, 1.0)
+        else:
+            adjusted_p_value = None
+
+        if adjusted_p_value is not None:
+            significance = adjusted_p_value < 0.05
+        else:
+            significance = False
+
+        statistical_results.append({
+            'population': population,
+            'test used': test_used,
+            'p-value': p_value,
+            'adjusted p-value': adjusted_p_value,
+            'significant': significance,
+            'responder mean': round(responder_mean, 2),
+            'responder median': round(responder_median, 2),
+            'non-responder mean': round(non_responder_mean, 2),
+            'non-responder median': round(non_responder_median, 2)
+        })
+    
+    return subset, pd.DataFrame(statistical_results)
+
 
 if __name__ == "__main__":
     initialize_database()
     load_data(csv_file)
     get_frequency()
+    get_statistics()
