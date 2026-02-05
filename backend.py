@@ -5,6 +5,7 @@ import os
 DB_name = 'clinical_trial.db'
 csv_file = 'cell-count.csv'
 
+# Part 1
 def initialize_database():
     with sqlite3.connect(DB_name) as con:
         cursor = con.cursor()
@@ -85,6 +86,37 @@ def load_data(csv_file):
         except Exception as e:
             print(f"Error loading data into database: {e}")
 
+# Part 2
+def get_frequency():
+    with sqlite3.connect(DB_name) as con:
+        query = '''
+            SELECT 
+                samples.sample, samples.b_cell, samples.cd8_t_cell, samples.cd4_t_cell, samples.nk_cell, samples.monocyte,
+                subjects.subject, subjects.condition, subjects.treatment, subjects.response, subjects.sample_type
+            FROM samples
+            JOIN subjects ON samples.subject = subjects.subject
+        '''
+        df = pd.read_sql_query(query, con)
+
+        population_cols = ['b_cell', 'cd8_t_cell', 'cd4_t_cell', 'nk_cell', 'monocyte']
+        df['total_count'] = df[population_cols].sum(axis=1)
+
+        metadata_cols = ['sample', 'subject', 'condition', 'treatment', 'response', 'sample_type']
+
+        df_long = df.melt(
+            id_vars = metadata_cols + ['total_count'],
+            value_vars = population_cols,
+            var_name = 'population',
+            value_name = 'count'
+        )
+
+        df_long['percentage'] = (df_long['count'] / df_long['total_count']) * 100
+
+        return df_long
+
+# Part 3
+
 if __name__ == "__main__":
     initialize_database()
     load_data(csv_file)
+    get_frequency()
