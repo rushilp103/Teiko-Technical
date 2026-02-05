@@ -10,35 +10,43 @@ def initialize_database():
         cursor = con.cursor()
 
         # Clean up existing tables if they exist to avoid conflicts
-        cursor.execute("DROP TABLE IF EXISTS cell_counts")
+        cursor.execute("DROP TABLE IF EXISTS projects")
+        cursor.execute("DROP TABLE IF EXISTS subjects")
         cursor.execute("DROP TABLE IF EXISTS samples")
 
         cursor.execute("PRAGMA foreign_keys = ON;")
 
         cursor.execute('''
-            CREATE TABLE samples (
-                sample TEXT PRIMARY KEY,
+            CREATE TABLE projects (
+                project TEXT PRIMARY KEY
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE subjects (
+                subject TEXT PRIMARY KEY,
                 project TEXT,
-                subject TEXT,
                 condition TEXT,
                 age INTEGER,
                 sex TEXT,
                 treatment TEXT,
                 response TEXT,
                 sample_type TEXT,
-                time_from_treatment_start INTEGER
+                FOREIGN KEY (project) REFERENCES projects(project)
             )
         ''')
 
         cursor.execute('''
-            CREATE TABLE cell_counts (
+            CREATE TABLE samples (
                 sample TEXT PRIMARY KEY,
+                subject TEXT,
+                time_from_treatment_start INTEGER,
                 b_cell INTEGER,
                 cd8_t_cell INTEGER,
                 cd4_t_cell INTEGER,
                 nk_cell INTEGER,
                 monocyte INTEGER,
-                FOREIGN KEY (sample) REFERENCES samples(sample)
+                FOREIGN KEY (subject) REFERENCES subjects(subject)
             )
         ''')
     
@@ -58,15 +66,19 @@ def load_data(csv_file):
     with sqlite3.connect(DB_name) as con:
         con.execute("PRAGMA foreign_keys = ON;")
 
-        samples_cols = ['sample', 'project', 'subject', 'condition', 'age', 'sex', 'treatment', 'response', 'sample_type', 'time_from_treatment_start']
-        df_samples = df[samples_cols].drop_duplicates(subset=['sample'])
+        projects_cols = ['project']
+        projects_cols = df[projects_cols].drop_duplicates()
        
-        cell_counts_cols = ['sample', 'b_cell', 'cd8_t_cell', 'cd4_t_cell', 'nk_cell', 'monocyte']
-        df_cell_counts = df[cell_counts_cols].drop_duplicates(subset=['sample'])
+        subjects_cols = ['subject', 'project', 'condition', 'age', 'sex', 'treatment', 'response', 'sample_type']
+        subjects_cols = df[subjects_cols].drop_duplicates(subset=['subject'])
+
+        samples_cols = ['sample', 'subject', 'time_from_treatment_start', 'b_cell', 'cd8_t_cell', 'cd4_t_cell', 'nk_cell', 'monocyte']
+        samples_cols = df[samples_cols].drop_duplicates(subset=['sample'])
 
         try:
-            df_samples.to_sql('samples', con, if_exists='append', index=False)
-            df_cell_counts.to_sql('cell_counts', con, if_exists='append', index=False)
+            projects_cols.to_sql('projects', con, if_exists='append', index=False)
+            subjects_cols.to_sql('subjects', con, if_exists='append', index=False)
+            samples_cols.to_sql('samples', con, if_exists='append', index=False)
             print("Data loaded successfully into the database.")
         except sqlite3.IntegrityError as ie:
             print(f"Integrity error: {ie}")
