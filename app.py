@@ -58,8 +58,9 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
                     html.Label("Select Cell Population to View Statistics:"),
                     dcc.Dropdown(
                         id='population-dropdown',
-                        options=sorted(subset_df['population'].unique()),
-                        value='b_cell',
+                        options=[{'label': 'All Populations', 'value': 'all'}] + 
+                                [{'label': i, 'value': i} for i in sorted(subset_df['population'].unique())],
+                        value='all',  # Default value in dropdown
                         clearable=False,
                         style={'width': '300px'}
                     ),
@@ -83,7 +84,16 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
                             'color': '#155724'
                         }
                     ]
-                )
+                ),
+
+                html.Div(style={'backgroundColor': '#f8d7da', 'color': '#721c24', 'padding': '10px', 'borderRadius': '5px', 'marginTop': '20px'}, children=[
+                    html.H4("Statistical Interpretation:", style={'marginTop': '0'}),
+                    dcc.Markdown('''
+                    * **Overall Findings:** There are no statistically signficant differences in baseline PBMC cell frequencies between responders and non-responders in melanoma patients treated with Miraclib.
+                    * **Specific Observations:** Although CD4 T-cells showed a potential trends with a raw p-value of 0.0134, it was not statistically significant after corrrecting for multiple testing (adjusted p-value of 0.067). The effect size of -0.0644 was negligible, indicating minimal practical difference between groups. Other cell populations did not show any statistically significant differences, with all adjusted p-values well above the 0.05 threshold and small effect sizes.
+                    * **Conclusion:** These results suggest that baseline PBMC cell frequencies may not be reliable predictors of treatment response in this specific clinical context. Further research with larger sample sizes or additional biomarkers may be necessary to identify factors influencing treatment outcomes.
+                    ''')
+                ])
             ])
         ]),
 
@@ -93,7 +103,7 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
                 html.H3("Baseline Demographics (Time = 0)"),
                 html.P("Filter to explore specific subgroups."),
 
-                html.Div(style={'display': 'flex', 'gap': '20px', 'marginBottom': '20px', 'padding': '10px'}, children=[
+                html.Div(style={'display': 'flex', 'gap': '50px', 'marginBottom': '20px', 'padding': '10px'}, children=[
                     html.Div([
                         html.Label("Filter by Project:", style={'fontWeight': 'bold'}),
                         dcc.Dropdown(
@@ -102,7 +112,7 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
                             multi=True,
                             placeholder="All Projects"
                         )
-                    ], style={'width': '30%'}),
+                    ], style={'width': '30%', 'textAlign': 'center'}),
 
                     html.Div([
                         html.Label("Filter by Sex:", style={'fontWeight': 'bold'}),
@@ -112,7 +122,7 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
                             multi=True,
                             placeholder="All Sexes"
                         )
-                    ], style={'width': '30%'}),
+                    ], style={'width': '30%', 'textAlign': 'center'}),
 
                     html.Div([
                         html.Label("Filter by Response:", style={'fontWeight': 'bold'}),
@@ -122,19 +132,19 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
                             multi=True,
                             placeholder="All Responses"
                         )
-                    ], style={'width': '30%'})
+                    ], style={'width': '30%', 'textAlign': 'center'})
                 ]),
 
                 html.Div(style={'display': 'flex', 'justifyContent': 'space-around', 'marginBottom': '20px'}, children=[
-                    html.Div(style={'border': '1px solid #ccc', 'borderRadius': '10px', 'padding': '10px', 'width': '18%', 'textAlign': 'center'}, children=[
+                    html.Div(style={'border': '1px solid #ccc', 'borderRadius': '10px', 'padding': '10px', 'width': '25%', 'textAlign': 'center'}, children=[
                         html.H2(id='metric-total', style={'margin': '0', 'color': '#3A75AF'}),
                         html.P('Samples Selected')
                     ]),
-                    html.Div(style={'border': '1px solid #ccc', 'borderRadius': '10px', 'padding': '10px', 'width': '18%', 'textAlign': 'center'}, children=[
+                    html.Div(style={'border': '1px solid #ccc', 'borderRadius': '10px', 'padding': '10px', 'width': '25%', 'textAlign': 'center'}, children=[
                         html.H2(id='metric-sex', style={'margin': '0', 'color': '#3A75AF'}),
                         html.P('Gender Split')
                     ]),
-                    html.Div(style={'border': '1px solid #ccc', 'borderRadius': '10px', 'padding': '10px', 'width': '18%', 'textAlign': 'center'}, children=[
+                    html.Div(style={'border': '1px solid #ccc', 'borderRadius': '10px', 'padding': '10px', 'width': '25%', 'textAlign': 'center'}, children=[
                         html.H2(id='metric-response', style={'margin': '0', 'color': '#3A75AF'}),
                         html.P('Responders vs Non-Responders')
                     ]),
@@ -160,17 +170,32 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
     Input('population-dropdown', 'value')
 )
 def update_box_plot(selected_population):
-    filtered_data = subset_df[subset_df['population'] == selected_population]
+    if selected_population == 'all':
+        fig = px.box(
+            subset_df,
+            x='response',
+            y='percentage',
+            color='response',
+            points='all',
+            facet_col='population',
+            facet_col_wrap=5,
+            title='Percentage Distribution of Cell Populations by Response',
+            color_discrete_map={'yes': "green", 'no': "red"}
+        )
+        fig.update_yaxes(matches='y') 
+        fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1].replace("_", " ").title()))
+    else:
+        filtered_data = subset_df[subset_df['population'] == selected_population]
 
-    fig = px.box(
-        filtered_data,
-        x='response',
-        y='percentage',
-        color='response',
-        points='all',
-        title=f'Percentage Distribution of {selected_population} by Response',
-        color_discrete_map={'yes': "green", 'no': "red"}
-    )
+        fig = px.box(
+            filtered_data,
+            x='response',
+            y='percentage',
+            color='response',
+            points='all',
+            title=f'Percentage Distribution of {selected_population} by Response',
+            color_discrete_map={'yes': "green", 'no': "red"}
+        )
     return fig
 
 @app.callback(
