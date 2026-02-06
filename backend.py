@@ -198,11 +198,24 @@ def get_statistics():
     
     return subset, pd.DataFrame(statistical_results)
 
+# Part 4
+def get_specific_subset_data():
+    with sqlite3.connect(DB_name) as con:
+        query = '''
+            SELECT subjects.project, subjects.response, subjects.sex, samples.sample
+            FROM samples
+            JOIN subjects ON samples.subject = subjects.subject
+            WHERE subjects.condition = 'melanoma'
+              AND subjects.sample_type = 'PBMC'
+              AND subjects.treatment = 'miraclib'
+              AND samples.time_from_treatment_start = 0
+        '''
+        df = pd.read_sql_query(query, con)
+    return df
 
 if __name__ == "__main__":
     initialize_database()
     load_data(csv_file)
-    get_frequency()
-    
-    subset, stats_df = get_statistics()
-    print(stats_df.to_string(index=False))
+    print(get_frequency())
+    print(get_statistics())
+    print(get_specific_subset_data())
