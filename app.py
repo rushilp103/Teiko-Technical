@@ -18,6 +18,7 @@ baseline_df = backend.get_specific_subset_data()
 
 # Preparing table for part 2
 frequency_display = frequency_df[['sample', 'total_count', 'population', 'count', 'percentage']]
+frequency_display['percentage'] = frequency_display['percentage'].map("{:.2f}%".format)
 
 # Preparing metrics for part 4
 total_patients = len(baseline_df)
@@ -29,7 +30,6 @@ non_responders = len(baseline_df[baseline_df['response'] == 'no'])
 # Layout of the app
 app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '1200px', 'margin': '0 auto', 'padding': '20px'}, children=[
     html.H1("Clinical Trial Data Dashboard", style={'textAlign': 'center', 'color': "#3A75AF"}),
-    html.P("Analysis of Melanoma / Miraclib / PBMC Samples", style={'textAlign': 'center', 'fontSize': '18px', 'color': "#000000"}),
 
     html.Hr(),
 
@@ -42,7 +42,7 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
             dash_table.DataTable(
                 data=frequency_display.to_dict('records'),
                 columns=[{"name": i, "id": i} for i in frequency_display.columns],
-                page_size=10,
+                page_size=20,
                 style_table={'overflowX': 'auto'},
                 style_cell={'textAlign': 'left', 'padding': '5px'},
                 style_header={'backgroundColor': '#3A75AF', 'color': 'white', 'fontWeight': 'bold'},
@@ -91,29 +91,63 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
         dcc.Tab(label='Baseline Characteristics', children=[
             html.Div(style={'padding': '10px'}, children=[
                 html.H3("Baseline Demographics (Time = 0)"),
+                html.P("Filter to explore specific subgroups."),
+
+                html.Div(style={'display': 'flex', 'gap': '20px', 'marginBottom': '20px', 'padding': '10px'}, children=[
+                    html.Div([
+                        html.Label("Filter by Project:", style={'fontWeight': 'bold'}),
+                        dcc.Dropdown(
+                            id='project-filter',
+                            options=sorted(baseline_df['project'].unique()),
+                            multi=True,
+                            placeholder="All Projects"
+                        )
+                    ], style={'width': '30%'}),
+
+                    html.Div([
+                        html.Label("Filter by Sex:", style={'fontWeight': 'bold'}),
+                        dcc.Dropdown(
+                            id='sex-filter',
+                            options=['M', 'F'],
+                            multi=True,
+                            placeholder="All Sexes"
+                        )
+                    ], style={'width': '30%'}),
+
+                    html.Div([
+                        html.Label("Filter by Response:", style={'fontWeight': 'bold'}),
+                        dcc.Dropdown(
+                            id='response-filter',
+                            options=['yes', 'no'],
+                            multi=True,
+                            placeholder="All Responses"
+                        )
+                    ], style={'width': '30%'})
+                ]),
 
                 html.Div(style={'display': 'flex', 'justifyContent': 'space-around', 'marginBottom': '20px'}, children=[
-                    html.Div(style={'border': '1px solid #ccc', 'borderRadius': '5px', 'padding': '10px', 'width': '33%', 'textAlign': 'center'}, children=[
-                        html.H2(total_patients, style={'margin': '0', 'color': '#3A75AF'}),
-                        html.P("Total Patients", style={'margin': '0'})
+                    html.Div(style={'border': '1px solid #ccc', 'borderRadius': '10px', 'padding': '10px', 'width': '18%', 'textAlign': 'center'}, children=[
+                        html.H2(id='metric-total', style={'margin': '0', 'color': '#3A75AF'}),
+                        html.P('Samples Selected')
                     ]),
-                    html.Div(style={'border': '1px solid #ccc', 'borderRadius': '5px', 'padding': '10px', 'width': '33%', 'textAlign': 'center'}, children=[
-                        html.H2(f"{males}M / {females}F", style={'margin': '0', 'color': '#3A75AF'}),
-                        html.P("Gender Distribution", style={'margin': '0'})
+                    html.Div(style={'border': '1px solid #ccc', 'borderRadius': '10px', 'padding': '10px', 'width': '18%', 'textAlign': 'center'}, children=[
+                        html.H2(id='metric-sex', style={'margin': '0', 'color': '#3A75AF'}),
+                        html.P('Gender Split')
                     ]),
-                    html.Div(style={'border': '1px solid #ccc', 'borderRadius': '5px', 'padding': '10px', 'width': '33%', 'textAlign': 'center'}, children=[
-                        html.H2(f"{responders} vs {non_responders}", style={'margin': '0', 'color': '#3A75AF'}),
-                        html.P("Responders vs Non-Responders", style={'margin': '0'})
+                    html.Div(style={'border': '1px solid #ccc', 'borderRadius': '10px', 'padding': '10px', 'width': '18%', 'textAlign': 'center'}, children=[
+                        html.H2(id='metric-response', style={'margin': '0', 'color': '#3A75AF'}),
+                        html.P('Responders vs Non-Responders')
                     ]),
                 ]),
 
                 html.H4("Baseline Data Table"),
                 dash_table.DataTable(
-                    data=baseline_df.to_dict('records'),
+                    id='baseline-table',
                     columns=[{"name": i, "id": i} for i in baseline_df.columns],
-                    page_size=10,
+                    page_size=20,
                     style_cell={'textAlign': 'left', 'padding': '5px'},
                     style_header={'backgroundColor': '#3A75AF', 'color': 'white', 'fontWeight': 'bold'},
+                    export_format='csv'
                 )
             ])
         ]),
@@ -138,6 +172,36 @@ def update_box_plot(selected_population):
         color_discrete_map={'yes': "green", 'no': "red"}
     )
     return fig
+
+@app.callback(
+    [Output('baseline-table', 'data'),
+     Output('metric-total', 'children'),
+     Output('metric-sex', 'children'),
+     Output('metric-response', 'children')],
+    [Input('project-filter', 'value'),
+     Input('sex-filter', 'value'),
+     Input('response-filter', 'value')]
+)
+def update_baseline_table(selected_projects, selected_sexes, selected_responses):
+    full_dataset = baseline_df.copy()
+
+    if selected_projects:
+        full_dataset = full_dataset[full_dataset['project'].isin(selected_projects)]
+    if selected_sexes:
+        full_dataset = full_dataset[full_dataset['sex'].isin(selected_sexes)]
+    if selected_responses:
+        full_dataset = full_dataset[full_dataset['response'].isin(selected_responses)]
+
+    total_samples = len(full_dataset)
+    males = len(full_dataset[full_dataset['sex'] == 'M'])
+    females = len(full_dataset[full_dataset['sex'] == 'F'])
+    responders = len(full_dataset[full_dataset['response'] == 'yes'])
+    non_responders = len(full_dataset[full_dataset['response'] == 'no'])
+
+    gender_split = f"{males}M / {females}F"
+    response_split = f"{responders} Responders / {non_responders} Non-Responders"
+
+    return full_dataset.to_dict('records'), total_samples, gender_split, response_split
 
 # Run server
 if __name__ == '__main__':

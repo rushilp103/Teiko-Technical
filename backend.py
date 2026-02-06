@@ -107,7 +107,9 @@ def get_frequency():
             value_name = 'count'
         )
 
-        df_long['percentage'] = (df_long['count'] / df_long['total_count']) * 100
+        df_long['percentage'] = ((df_long['count'] / df_long['total_count']) * 100).round(2)
+
+        df_long = df_long.sort_values(by=['sample', 'population'])
 
         return df_long
 
@@ -213,9 +215,25 @@ def get_specific_subset_data():
         df = pd.read_sql_query(query, con)
     return df
 
+# Average b-cell question
+def get_average_b_cell():
+    with sqlite3.connect(DB_name) as con:
+        query = '''
+            SELECT AVG(samples.b_cell)
+            FROM samples
+            JOIN subjects ON samples.subject = subjects.subject
+            WHERE subjects.condition = 'melanoma'
+              AND subjects.sex = 'M'
+              AND subjects.response = 'yes'
+              AND samples.time_from_treatment_start = 0
+        '''
+        result = pd.read_sql_query(query, con)
+    return result.iloc[0, 0]
+
 if __name__ == "__main__":
     initialize_database()
     load_data(csv_file)
     print(get_frequency())
     print(get_statistics())
     print(get_specific_subset_data())
+    print(f"Average b_cell count: {get_average_b_cell()}")
