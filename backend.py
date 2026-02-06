@@ -69,14 +69,9 @@ def load_data(csv_file):
     with sqlite3.connect(DB_name) as con:
         con.execute("PRAGMA foreign_keys = ON;")
 
-        projects_cols = ['project']
-        projects_cols = df[projects_cols].drop_duplicates()
-       
-        subjects_cols = ['subject', 'project', 'condition', 'age', 'sex', 'treatment', 'response', 'sample_type']
-        subjects_cols = df[subjects_cols].drop_duplicates(subset=['subject'])
-
-        samples_cols = ['sample', 'subject', 'time_from_treatment_start', 'b_cell', 'cd8_t_cell', 'cd4_t_cell', 'nk_cell', 'monocyte']
-        samples_cols = df[samples_cols].drop_duplicates(subset=['sample'])
+        projects_cols = df[['project']].drop_duplicates()
+        subjects_cols = df[['subject', 'project', 'condition', 'age', 'sex', 'treatment', 'response', 'sample_type']].drop_duplicates(subset=['subject'])
+        samples_cols = df[['sample', 'subject', 'time_from_treatment_start', 'b_cell', 'cd8_t_cell', 'cd4_t_cell', 'nk_cell', 'monocyte']].drop_duplicates(subset=['sample'])
 
         try:
             projects_cols.to_sql('projects', con, if_exists='append', index=False)
@@ -127,9 +122,10 @@ def get_statistics():
     ]
 
     statistical_results = []
-    num_tests = len(subset['population'].unique())
+    populations = subset['population'].unique()
+    num_tests = len(populations)
 
-    for population in subset['population'].unique():
+    for population in populations:
         population_data = subset[subset['population'] == population]
 
         responders = population_data[population_data['response'].str.lower() == 'yes']['percentage']
@@ -146,7 +142,7 @@ def get_statistics():
         else:
             responder_mean = responder_median = non_responder_mean = non_responder_median = 0
 
-        # Normality test
+        # Normality test using Shapiro-Wilk
         is_normal = False
         if num_responders >= 3 and num_non_responders >= 3:
             _, p_responders = stats.shapiro(responders)
@@ -155,14 +151,27 @@ def get_statistics():
 
         p_value = None
         test_used = "N/A"
+        effect_size = None
 
         if num_responders > 1 and num_non_responders > 1:
             if is_normal:
-                _, p_value = stats.ttest_ind(responders, non_responders, equal_var=False)
-                test_used = "t-test"
+                # If normal, use Welch's t-test
+                t_stat, p_value = stats.ttest_ind(responders, non_responders, equal_var=False)
+                test_used = "Welch's t-test"
+
+                # Calculate Cohen's d
+                n1, n2 = num_responders, num_non_responders
+                var1 = np.var(responders, ddof=1)
+                var2 = np.var(non_responders, ddof=1)
+                std_pooled = np.sqrt(((n1 - 1) * var1 + (n2 - 1) * var2) / (n1 + n2 - 2))
+                effect_size = (responder_mean - non_responder_mean) / std_pooled if std_pooled > 0 else 0
             else:
-                _, p_value = stats.mannwhitneyu(responders, non_responders, alternative='two-sided')
+                # If not normal, use Mann-Whitney U test
+                u_stat, p_value = stats.mannwhitneyu(responders, non_responders, alternative='two-sided')
                 test_used = "Mann-Whitney U"
+
+                # Calculate rank-biserial correlation
+                effect_size = 1 - (2 * u_stat) / (num_responders * num_non_responders) if (num_responders * num_non_responders) > 0 else 0
         
         if p_value is not None:
             adjusted_p_value = min(p_value * num_tests, 1.0)
@@ -170,16 +179,17 @@ def get_statistics():
             adjusted_p_value = None
 
         if adjusted_p_value is not None:
-            significance = adjusted_p_value < 0.05
+            significant = adjusted_p_value < 0.05
         else:
-            significance = False
+            significant = False
 
         statistical_results.append({
             'population': population,
             'test used': test_used,
-            'p-value': p_value,
-            'adjusted p-value': adjusted_p_value,
-            'significant': significance,
+            'p-value': round(p_value, 4) if p_value is not None else None,
+            'adjusted p-value': round(adjusted_p_value, 4) if adjusted_p_value is not None else None,
+            'significant': significant,
+            'effect size': round(effect_size, 4) if effect_size is not None else None,
             'responder mean': round(responder_mean, 2),
             'responder median': round(responder_median, 2),
             'non-responder mean': round(non_responder_mean, 2),
@@ -193,4 +203,6 @@ if __name__ == "__main__":
     initialize_database()
     load_data(csv_file)
     get_frequency()
-    get_statistics()
+    
+    subset, stats_df = get_statistics()
+    print(stats_df.to_string(index=False))
