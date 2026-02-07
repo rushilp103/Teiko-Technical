@@ -90,7 +90,7 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
                 dash_table.DataTable(
                     data=statistics_df.to_dict('records'),
                     columns=[{"name": i, "id": i} for i in desired_order if i in statistics_df.columns],
-                    style_table={'overflowX': 'scroll'},
+                    style_table={'overflowX': 'auto'},
                     style_cell={'textAlign': 'left', 'padding': '5px'},
                     style_header={'backgroundColor': '#3A75AF', 'color': 'white', 'fontWeight': 'bold'},
                     style_data_conditional=[
@@ -199,7 +199,7 @@ def update_box_plot(selected_population):
             title='Percentage Distribution of Cell Populations by Response',
             color_discrete_map={'yes': "green", 'no': "red"}
         )
-        fig.update_yaxes(matches=None) 
+        fig.update_yaxes(matches='y') 
         fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1].replace("_", " ").title()))
     else:
         filtered_data = subset_df[subset_df['population'] == selected_population]
