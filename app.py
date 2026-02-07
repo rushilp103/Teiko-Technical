@@ -20,6 +20,21 @@ baseline_df = backend.get_specific_subset_data()
 frequency_display = frequency_df[['sample', 'total_count', 'population', 'count', 'percentage']]
 frequency_display['percentage'] = frequency_display['percentage'].map("{:.2f}%".format)
 
+# Desired order for part 3
+desired_order = [
+    'population',
+    'p-value',
+    'adjusted p-value',
+    'significant',
+    'effect size',
+    'responder mean',
+    'responder median',
+    'non-responder mean',
+    'non-responder median',
+    'test used',
+    'test statistic'
+]
+
 # Preparing metrics for part 4
 total_patients = len(baseline_df)
 males = len(baseline_df[baseline_df['sex'] == 'M'])
@@ -35,10 +50,10 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
 
     dcc.Tabs([
         # Tab for part 2: frequency
-        dcc.Tab(label='Cell Populaion Frequencies', children=[
+        dcc.Tab(label='Cell Population Frequencies', children=[
             html.H3("Relative Frequencies of Cell Populations"),
             html.P("This table shows the relative frequencies of different cell populations across samples."),
-
+        
             dash_table.DataTable(
                 data=frequency_display.to_dict('records'),
                 columns=[{"name": i, "id": i} for i in frequency_display.columns],
@@ -74,7 +89,8 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
 
                 dash_table.DataTable(
                     data=statistics_df.to_dict('records'),
-                    columns=[{"name": i, "id": i} for i in statistics_df.columns],
+                    columns=[{"name": i, "id": i} for i in desired_order if i in statistics_df.columns],
+                    style_table={'overflowX': 'scroll'},
                     style_cell={'textAlign': 'left', 'padding': '5px'},
                     style_header={'backgroundColor': '#3A75AF', 'color': 'white', 'fontWeight': 'bold'},
                     style_data_conditional=[
@@ -91,6 +107,7 @@ app.layout = html.Div(style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '120
                     dcc.Markdown('''
                     * **Overall Findings:** There are no statistically signficant differences in baseline PBMC cell frequencies between responders and non-responders in melanoma patients treated with Miraclib.
                     * **Specific Observations:** Although CD4 T-cells showed a potential trends with a raw p-value of 0.0134, it was not statistically significant after corrrecting for multiple testing (adjusted p-value of 0.067). The effect size of -0.0644 was negligible, indicating minimal practical difference between groups. Other cell populations did not show any statistically significant differences, with all adjusted p-values well above the 0.05 threshold and small effect sizes.
+                    * **Methodoloy Note:** The Shapiro-Wilk test indicated that the data did not meet normality assumptions, leading to the use of the Mann-Whitney U test for non-parametric comparisons.
                     * **Conclusion:** These results suggest that baseline PBMC cell frequencies may not be reliable predictors of treatment response in this specific clinical context. Further research with larger sample sizes or additional biomarkers may be necessary to identify factors influencing treatment outcomes.
                     ''')
                 ])
@@ -182,7 +199,7 @@ def update_box_plot(selected_population):
             title='Percentage Distribution of Cell Populations by Response',
             color_discrete_map={'yes': "green", 'no': "red"}
         )
-        fig.update_yaxes(matches='y') 
+        fig.update_yaxes(matches=None) 
         fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1].replace("_", " ").title()))
     else:
         filtered_data = subset_df[subset_df['population'] == selected_population]

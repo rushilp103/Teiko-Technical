@@ -154,12 +154,14 @@ def get_statistics():
         p_value = None
         test_used = "N/A"
         effect_size = None
+        test_statistic = None
 
         if num_responders > 1 and num_non_responders > 1:
             if is_normal:
                 # If normal, use Welch's t-test
                 t_stat, p_value = stats.ttest_ind(responders, non_responders, equal_var=False)
                 test_used = "Welch's t-test"
+                test_statistic = t_stat
 
                 # Calculate Cohen's d
                 n1, n2 = num_responders, num_non_responders
@@ -171,6 +173,7 @@ def get_statistics():
                 # If not normal, use Mann-Whitney U test
                 u_stat, p_value = stats.mannwhitneyu(responders, non_responders, alternative='two-sided')
                 test_used = "Mann-Whitney U"
+                test_statistic = u_stat
 
                 # Calculate rank-biserial correlation
                 effect_size = 1 - (2 * u_stat) / (num_responders * num_non_responders) if (num_responders * num_non_responders) > 0 else 0
@@ -188,6 +191,7 @@ def get_statistics():
         statistical_results.append({
             'population': population,
             'test used': test_used,
+            'test statistic': round(test_statistic, 4) if test_statistic is not None else None,
             'p-value': round(p_value, 4) if p_value is not None else None,
             'adjusted p-value': round(adjusted_p_value, 4) if adjusted_p_value is not None else None,
             'significant': significant,
